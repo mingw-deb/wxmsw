@@ -1,0 +1,8 @@
+usr/*/include/*
+usr/*/lib/*.a
+usr/*/lib/wx
+usr/*/bin/wxrc-3.0
+usr/*/bin/wx-config
+usr/*/bin/wxrc.exe
+usr/*/share/bakefile/presets/*
+usr/*/share/aclocal/*
