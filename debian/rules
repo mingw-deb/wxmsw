@@ -51,7 +51,7 @@ EXECUTE = \
 #override_dh_auto_configure:
 #	dh_auto_configure -- #	-DCMAKE_LIBRARY_PATH=$(DEB_HOST_MULTIARCH)
 
-.PHONY: configure build-arch install-arch
+#.PHONY: configure build-arch install-arch
 
 override_dh_clean:
 	for flag in enable-monolithic disable-shared ; do \
