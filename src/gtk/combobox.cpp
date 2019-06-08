@@ -87,7 +87,10 @@ END_EVENT_TABLE()
 wxComboBox::~wxComboBox()
 {
     if (m_entry)
+    {
         GTKDisconnect(m_entry);
+        g_object_remove_weak_pointer(G_OBJECT(m_entry), (void**)&m_entry);
+    }
 }
 
 void wxComboBox::Init()
@@ -141,6 +144,9 @@ bool wxComboBox::Create( wxWindow *parent, wxWindowID id, const wxString& value,
                                          !HasFlag(wxTE_PROCESS_ENTER) );
 
         gtk_editable_set_editable(GTK_EDITABLE(entry), true);
+#ifdef __WXGTK3__
+        gtk_entry_set_width_chars(entry, 0);
+#endif
     }
 
     Append(n, choices);
@@ -200,6 +206,7 @@ void wxComboBox::GTKCreateComboBoxWidget()
     g_object_ref(m_widget);
 
     m_entry = GTK_ENTRY(gtk_bin_get_child(GTK_BIN(m_widget)));
+    g_object_add_weak_pointer(G_OBJECT(m_entry), (void**)&m_entry);
 }
 
 GtkEditable *wxComboBox::GetEditable() const

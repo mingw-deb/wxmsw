@@ -54,7 +54,14 @@ public:
                                 wxTextEntryHintData::OnTextChanged, this);
     }
 
-    // default dtor is ok
+#ifdef wxHAS_EVENT_BIND
+    ~wxTextEntryHintData()
+    {
+        m_win->Unbind(wxEVT_SET_FOCUS, &wxTextEntryHintData::OnSetFocus, this);
+        m_win->Unbind(wxEVT_KILL_FOCUS, &wxTextEntryHintData::OnKillFocus, this);
+        m_win->Unbind(wxEVT_TEXT, &wxTextEntryHintData::OnTextChanged, this);
+    }
+#endif // wxHAS_EVENT_BIND
 
     // Get the real text of the control such as it was before we replaced it
     // with the hint.
@@ -100,8 +107,11 @@ private:
 
         // Save the old text colour and set a more inconspicuous one for the
         // hint.
-        m_colFg = m_win->GetForegroundColour();
-        m_win->SetForegroundColour(*wxLIGHT_GREY);
+        if (!m_colFg.IsOk())
+        {
+            m_colFg = m_win->GetForegroundColour();
+            m_win->SetForegroundColour(*wxLIGHT_GREY);
+        }
 
         m_entry->DoSetValue(m_hint, wxTextEntryBase::SetValue_NoEvent);
     }

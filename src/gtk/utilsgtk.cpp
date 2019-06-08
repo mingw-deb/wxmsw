@@ -222,7 +222,11 @@ static wxString GetSM()
 
     if ( !smc_conn )
     {
-        wxLogDebug("Failed to connect to session manager: %s", smerr);
+        // Don't report error if there is no session manager at all
+        if (getenv("SESSION_MANAGER"))
+        {
+            wxLogDebug("Failed to connect to session manager: %s", smerr);
+        }
         return wxEmptyString;
     }
 
@@ -427,11 +431,11 @@ wxGUIAppTraits::GetStandardCmdLineOptions(wxArrayString& names,
 {
     wxString usage;
 
-    // check whether GLib version is lower than 2.39
-    // because, as we use the undocumented _GOptionGroup struct, we don't want
-    // to run this code with future versions which might change it (2.38 is the
-    // latest one at the time of this writing)
-    if (glib_check_version(2,39,0))
+    // Check whether GLib version is lower than the last tested version for
+    // which the code below works because, as we use the undocumented
+    // _GOptionGroup struct, we don't want to run this code with future
+    // versions which might change it and result in run-time crashes.
+    if (glib_check_version(2,44,0))
     {
         usage << _("The following standard GTK+ options are also supported:\n");
 

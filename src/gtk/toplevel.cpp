@@ -227,15 +227,16 @@ wxgtk_tlw_key_press_event(GtkWidget *widget, GdkEventKey *event)
     // GTK+ gtk_window_key_press_event() handler.
 
     if ( gtk_window_propagate_key_event(window, event) )
-        return TRUE;
+        return true;
 
     if ( gtk_window_activate_key(window, event) )
-        return TRUE;
+        return true;
 
-    if (GTK_WIDGET_GET_CLASS(widget)->key_press_event(widget, event))
-        return TRUE;
+    void* parent_class = g_type_class_peek_parent(G_OBJECT_GET_CLASS(widget));
+    GTK_WIDGET_CLASS(parent_class)->key_press_event(widget, event);
 
-    return FALSE;
+    // Avoid calling the default handler, we have already done everything it does
+    return true;
 }
 }
 
@@ -1406,6 +1407,9 @@ void wxTopLevelWindowGTK::GTKUpdateDecorSize(const DecorSize& decorSize)
 #ifdef __WXGTK3__
         wxGTKSizeRevalidate(this);
 #endif
+        if (!m_isShown)
+            return;
+
         gtk_widget_show(m_widget);
 
 #ifdef __WXGTK3__
@@ -1540,7 +1544,7 @@ void wxTopLevelWindowGTK::RemoveGrab()
 {
     if (m_grabbed)
     {
-        gtk_main_quit();
+        wxGUIEventLoop::GetActive()->Exit();
         m_grabbed = false;
     }
 }
