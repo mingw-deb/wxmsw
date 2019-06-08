@@ -1564,7 +1564,8 @@ void wxWindowDCImpl::SetPen( const wxPen &pen )
 {
     wxCHECK_RET( IsOk(), wxT("invalid window dc") );
 
-    if (m_pen == pen) return;
+    if (m_pen == pen && (!pen.IsOk() || pen.GetStyle() != wxPENSTYLE_USER_DASH))
+        return;
 
     m_pen = pen;
 
@@ -1898,12 +1899,6 @@ void wxWindowDCImpl::DoSetClippingRegion( wxCoord x, wxCoord y, wxCoord width, w
 void wxWindowDCImpl::DoSetDeviceClippingRegion( const wxRegion &region  )
 {
     wxCHECK_RET( IsOk(), wxT("invalid window dc") );
-
-    if (region.Empty())
-    {
-        DestroyClippingRegion();
-        return;
-    }
 
     if (!m_gdkwindow) return;
 

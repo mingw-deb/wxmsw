@@ -6,7 +6,7 @@
 
 DOXYFILE_ENCODING      = UTF-8
 PROJECT_NAME           = wxWidgets
-PROJECT_NUMBER         = 3.0.3
+PROJECT_NUMBER         = 3.0.4
 PROJECT_BRIEF          =
 PROJECT_LOGO           = logo.png
 OUTPUT_DIRECTORY       = out
@@ -208,7 +208,7 @@ ALIASES += rightCurly="}"
 #---------------------------------------------------------------------------
 
 # For indicating a sample location
-ALIASES += sampledir{1}="@e Location: @c samples/\1 subdirectory of your wxWidgets installation or http://svn.wxwidgets.org/viewvc/wx/wxWidgets/trunk/samples/\1"
+ALIASES += sampledir{1}="@e Location: @c samples/\1 subdirectory of your wxWidgets installation or https://github.com/wxWidgets/wxWidgets/tree/WX_3_0_BRANCH/samples/\1"
 
 # For refering to the corresponding sample in a class document or a overview
 # Usually placed in the queue of @see

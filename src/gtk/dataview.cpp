@@ -163,16 +163,16 @@ gboolean wxdataview_selection_func(GtkTreeSelection * WXUNUSED(selection),
 class wxGtkTreeSelectionLock
 {
 public:
-    wxGtkTreeSelectionLock(GtkTreeSelection *selection)
+    wxGtkTreeSelectionLock(GtkTreeSelection *selection, bool& alreadySet)
         : m_selection(selection)
     {
         wxASSERT_MSG( !ms_instance, "this class is not reentrant currently" );
 
         ms_instance = this;
 
-        if ( ms_firstTime )
+        if ( !alreadySet )
         {
-            ms_firstTime = false;
+            alreadySet = true;
             CheckCurrentSelectionFunc(NULL);
         }
         else
@@ -225,7 +225,6 @@ private:
     }
 
     static wxGtkTreeSelectionLock *ms_instance;
-    static bool ms_firstTime;
 
     GtkTreeSelection * const m_selection;
 
@@ -233,7 +232,6 @@ private:
 };
 
 wxGtkTreeSelectionLock *wxGtkTreeSelectionLock::ms_instance = NULL;
-bool wxGtkTreeSelectionLock::ms_firstTime = true;
 
 //-----------------------------------------------------------------------------
 // wxDataViewCtrlInternal
@@ -314,6 +312,11 @@ public:
 
     void OnInternalIdle();
 
+    // Forward to private wxDataViewCtrl methods that we can call but
+    // wxGtkDataViewModelNotifier, which needs them, can't.
+    void GtkDisableSelectionEvents() { m_owner->GtkDisableSelectionEvents(); }
+    void GtkEnableSelectionEvents() { m_owner->GtkEnableSelectionEvents(); }
+
 protected:
     void InitTree();
     void ScheduleRefresh();
@@ -344,6 +347,11 @@ private:
     wxGtkDataViewModelNotifier *m_notifier;
 
     bool                  m_dirty;
+
+public:
+    // Allow direct access to this one from wxDataViewCtrl as it's just a
+    // simple flag and it doesn't make much sense to encapsulate it.
+    bool                  m_selectionFuncSet;
 };
 
 
@@ -729,7 +737,13 @@ wxgtk_tree_model_init(GTypeInstance* instance, void*)
 {
     GtkWxTreeModel* tree_model = GTK_WX_TREE_MODEL(instance);
     tree_model->internal = NULL;
-    tree_model->stamp = g_random_int();
+
+    // 0 is handled specially in wxGtkTreeCellDataFunc, so don't use it as the
+    // stamp.
+    do
+    {
+        tree_model->stamp = g_random_int();
+    } while ( tree_model->stamp == 0 );
 }
 
 } // extern "C"
@@ -795,9 +809,18 @@ static GtkTreePath *
 wxgtk_tree_model_get_path (GtkTreeModel *tree_model,
                            GtkTreeIter  *iter)
 {
-    GtkWxTreeModel *wxtree_model = (GtkWxTreeModel *) tree_model;
-    g_return_val_if_fail (GTK_IS_WX_TREE_MODEL (wxtree_model), NULL);
-    g_return_val_if_fail (iter->stamp == GTK_WX_TREE_MODEL (wxtree_model)->stamp, NULL);
+    g_return_val_if_fail (GTK_IS_WX_TREE_MODEL (tree_model), NULL);
+
+    GtkWxTreeModel *wxtree_model = GTK_WX_TREE_MODEL (tree_model);
+    if ( wxtree_model->stamp == 0 )
+    {
+        // The model is temporarily invalid and can't be used, see Cleared(),
+        // but we need to return some valid path from here -- just return an
+        // empty one.
+        return gtk_tree_path_new();
+    }
+
+    g_return_val_if_fail (iter->stamp == wxtree_model->stamp, NULL);
 
     return wxtree_model->internal->get_path( iter );
 }
@@ -1775,13 +1798,28 @@ bool wxGtkDataViewModelNotifier::Cleared()
 
     GtkTreePath *path = gtk_tree_path_new_first();  // points to root
 
+    // It is important to avoid selection changed events being generated from
+    // here as they would reference the already deleted model items, which
+    // would result in crashes in any code attempting to handle these events.
+    m_internal->GtkDisableSelectionEvents();
+
+    // We also need to prevent wxGtkTreeCellDataFunc from using the model items
+    // not existing any longer, so change the model stamp to indicate that it
+    // temporarily can't be used.
+    const gint stampOrig = wxgtk_model->stamp;
+    wxgtk_model->stamp = 0;
+
     int i;
     for (i = 0; i < count; i++)
         gtk_tree_model_row_deleted( GTK_TREE_MODEL(wxgtk_model), path );
 
     gtk_tree_path_free( path );
 
+    wxgtk_model->stamp = stampOrig;
+
     m_internal->Cleared();
+
+    m_internal->GtkEnableSelectionEvents();
 
     return true;
 }
@@ -2912,6 +2950,13 @@ static void wxGtkTreeCellDataFunc( GtkTreeViewColumn *WXUNUSED(column),
     g_return_if_fail (GTK_IS_WX_TREE_MODEL (model));
     GtkWxTreeModel *tree_model = (GtkWxTreeModel *) model;
 
+    if ( !tree_model->stamp )
+    {
+        // The model is temporarily invalid and can't be used, see the code in
+        // wxGtkDataViewModelNotifier::Cleared().
+        return;
+    }
+
     wxDataViewRenderer *cell = (wxDataViewRenderer*) data;
 
     wxDataViewItem item( (void*) iter->user_data );
@@ -3419,6 +3464,7 @@ wxDataViewCtrlInternal::wxDataViewCtrlInternal( wxDataViewCtrl *owner, wxDataVie
     m_dropDataObject = NULL;
 
     m_dirty = false;
+    m_selectionFuncSet = false;
 
     m_gtk_model = wxgtk_tree_model_new();
     m_gtk_model->internal = this;
@@ -3444,6 +3490,7 @@ wxDataViewCtrlInternal::~wxDataViewCtrlInternal()
 
     g_object_unref( m_gtk_model );
 
+    delete m_root;
     delete m_dragDataObject;
     delete m_dropDataObject;
 }
@@ -4849,7 +4896,8 @@ void wxDataViewCtrl::DoSetCurrentItem(const wxDataViewItem& item)
     // Unfortunately the only way to do it seems to use our own selection
     // function and forbid any selection changes during set cursor call.
     wxGtkTreeSelectionLock
-        lock(gtk_tree_view_get_selection(GTK_TREE_VIEW(m_treeview)));
+        lock(gtk_tree_view_get_selection(GTK_TREE_VIEW(m_treeview)),
+             m_internal->m_selectionFuncSet);
 
     // Do move the cursor now.
     GtkTreeIter iter;
@@ -4890,7 +4938,8 @@ void wxDataViewCtrl::EditItem(const wxDataViewItem& item, const wxDataViewColumn
     // Unfortunately the only way to do it seems to use our own selection
     // function and forbid any selection changes during set cursor call.
     wxGtkTreeSelectionLock
-        lock(gtk_tree_view_get_selection(GTK_TREE_VIEW(m_treeview)));
+        lock(gtk_tree_view_get_selection(GTK_TREE_VIEW(m_treeview)),
+             m_internal->m_selectionFuncSet);
 
     // Do move the cursor now.
     GtkTreeIter iter;

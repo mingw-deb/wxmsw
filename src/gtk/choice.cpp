@@ -97,6 +97,7 @@ bool wxChoice::Create( wxWindow *parent, wxWindowID id,
 
 wxChoice::~wxChoice()
 {
+    Clear();
     delete m_strings;
 
  #ifdef __WXGTK3__
@@ -168,7 +169,8 @@ void wxChoice::DoClear()
 
     GtkComboBox* combobox = GTK_COMBO_BOX( m_widget );
     GtkTreeModel* model = gtk_combo_box_get_model( combobox );
-    gtk_list_store_clear(GTK_LIST_STORE(model));
+    if (model)
+        gtk_list_store_clear(GTK_LIST_STORE(model));
 
     m_clientData.Clear();
 
